@@ -1,4 +1,5 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
+import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import ratelimit from 'express-rate-limit';
@@ -15,6 +16,7 @@ if (config.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

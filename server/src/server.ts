@@ -1,12 +1,13 @@
 import app from './app';
 import { config } from './config/env';
 import logger from './config/logger';
-import { connectDatabse, disconnectDatabase } from './config/database';
+import { connectDatabase, disconnectDatabase } from './config/database';
+import { disconnectRedis } from './config/redis';
 
 const bootstrap = async () => {
   const port = config.PORT;
 
-  await connectDatabse();
+  await connectDatabase();
 
   const server = app.listen(port, () => {
     logger.info(`Server running at http://localhost:${port}`);
@@ -32,6 +33,7 @@ const bootstrap = async () => {
       await closeServer();
       logger.info('⛔ HTTP server closed.');
       await disconnectDatabase();
+      await disconnectRedis();
       process.exit(0);
     } catch (err) {
       logger.error('Error during shutdown:', err);

@@ -130,15 +130,15 @@ pnpm dev
 
 ## 🗄️ Database Commands
 
-| Command | Description |
-|---|---|
-| `docker compose up -d` | Start PostgreSQL in the background |
-| `docker compose down` | Stop and remove containers |
-| `pnpm prisma migrate dev` | Create & apply a new migration |
-| `pnpm prisma migrate deploy` | Apply pending migrations (production) |
-| `pnpm prisma generate` | Regenerate the Prisma client |
-| `pnpm prisma studio` | Open the visual database browser |
-| `pnpm prisma db push` | Push schema changes without migrations |
+| Command                      | Description                            |
+| ---------------------------- | -------------------------------------- |
+| `docker compose up -d`       | Start PostgreSQL in the background     |
+| `docker compose down`        | Stop and remove containers             |
+| `pnpm prisma migrate dev`    | Create & apply a new migration         |
+| `pnpm prisma migrate deploy` | Apply pending migrations (production)  |
+| `pnpm prisma generate`       | Regenerate the Prisma client           |
+| `pnpm prisma studio`         | Open the visual database browser       |
+| `pnpm prisma db push`        | Push schema changes without migrations |
 
 ---
 
