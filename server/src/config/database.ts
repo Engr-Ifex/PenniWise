@@ -8,7 +8,7 @@ const adapter = new PrismaPg(config.DATABASE_URL);
 
 export const prisma = new PrismaClient({ adapter });
 
-export const connectDatabse = async () => {
+export const connectDatabase = async () => {
   try {
     await prisma.$connect();
     logger.info('Database connected successfully');
