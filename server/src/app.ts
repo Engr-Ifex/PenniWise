@@ -30,8 +30,8 @@ const limiter = ratelimit({
   legacyHeaders: false,
 });
 
-app.use('/api', limiter);
-app.use('/api', router);
+app.use('/api/v1', limiter);
+app.use('/api/v1', router);
 
 /*
  * Handling unhandled Routes
