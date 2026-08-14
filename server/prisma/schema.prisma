@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +5,116 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String?     @unique
+  phone        String      @unique
+  passwordHash String?
+  firstName    String
+  lastName     String
+  bvn          String?     @unique
+  nin          String?     @unique
+  kycStatus    KYCStatus   @default(PENDING)
+  riskProfile  RiskProfile?
+  whatsappId   String      @unique
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  accounts     Account[]
+  transactions Transaction[]
+  savingsGoals SavingsGoal[]
+}
+
+model Account {
+  id            String      @id @default(cuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          AccountType
+  name          String
+  balance       Decimal     @default(0)
+  currency      String      @default("NGN")
+  institution   String?
+  accountNumber String?
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  transactions Transaction[]
+
+  @@index([userId])
+}
+
+model Transaction {
+  id          String            @id @default(cuid())
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accountId   String
+  account     Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  type        TransactionType
+  amount      Decimal
+  description String?
+  category    String?
+  reference   String?           @unique
+  status      TransactionStatus @default(PENDING)
+  metadata    Json?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([createdAt])
+}
+
+model SavingsGoal {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  targetAmount  Decimal
+  currentAmount Decimal   @default(0)
+  isLocked      Boolean   @default(false)
+  lockDate      DateTime?
+  interestRate  Decimal?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
+}
+
+enum KYCStatus {
+  PENDING
+  IN_PROGRESS
+  VERIFIED
+  REJECTED
+}
+
+enum RiskProfile {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+enum AccountType {
+  BROKERAGE
+  SAVINGS
+  FLEXIBLE_SAVINGS
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  DEPOSIT
+  WITHDRAWAL
+  DIVIDEND
+  INTEREST
+  TRANSFER
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
 }
