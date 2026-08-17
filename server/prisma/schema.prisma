@@ -1,93 +1,21 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-model User {
-  id           String      @id @default(cuid())
-  email        String?     @unique
-  phone        String      @unique
-  passwordHash String?
-  firstName    String
-  lastName     String
-  bvn          String?     @unique
-  nin          String?     @unique
-  kycStatus    KYCStatus   @default(PENDING)
-  riskProfile  RiskProfile?
-  whatsappId   String      @unique
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+// ============================================================
+// ENUMS
+// ============================================================
 
-  accounts     Account[]
-  transactions Transaction[]
-  savingsGoals SavingsGoal[]
-}
-
-model Account {
-  id            String      @id @default(cuid())
-  userId        String
-  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type          AccountType
-  name          String
-  balance       Decimal     @default(0)
-  currency      String      @default("NGN")
-  institution   String?
-  accountNumber String?
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  transactions Transaction[]
-
-  @@index([userId])
-}
-
-model Transaction {
-  id          String            @id @default(cuid())
-  userId      String
-  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accountId   String
-  account     Account           @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  type        TransactionType
-  amount      Decimal
-  description String?
-  category    String?
-  reference   String?           @unique
-  status      TransactionStatus @default(PENDING)
-  metadata    Json?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-
-  @@index([userId])
-  @@index([accountId])
-  @@index([createdAt])
-}
-
-model SavingsGoal {
-  id            String    @id @default(cuid())
-  userId        String
-  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name          String
-  targetAmount  Decimal
-  currentAmount Decimal   @default(0)
-  isLocked      Boolean   @default(false)
-  lockDate      DateTime?
-  interestRate  Decimal?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  @@index([userId])
-}
-
-enum KYCStatus {
-  PENDING
-  IN_PROGRESS
-  VERIFIED
-  REJECTED
+enum UserStatus {
+  PENDING_KYC
+  ACTIVE
+  SUSPENDED
+  CLOSED
 }
 
 enum RiskProfile {
@@ -96,25 +24,350 @@ enum RiskProfile {
   AGGRESSIVE
 }
 
-enum AccountType {
-  BROKERAGE
+enum AdminRole {
+  SUPPORT
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum KycType {
+  BVN
+  NIN
+  LIVENESS
+}
+
+enum KycStatus {
+  PENDING
+  VERIFIED
+  FAILED
+}
+
+enum WalletType {
   SAVINGS
-  FLEXIBLE_SAVINGS
+  TRADING
+}
+
+enum LedgerEntryType {
+  DEBIT
+  CREDIT
 }
 
 enum TransactionType {
-  BUY
-  SELL
   DEPOSIT
   WITHDRAWAL
-  DIVIDEND
-  INTEREST
+  TRADE_BUY
+  TRADE_SELL
+  SAVINGS_LOCK
+  SAVINGS_UNLOCK
+  INTEREST_ACCRUAL
+  FEE
   TRANSFER
 }
 
 enum TransactionStatus {
   PENDING
+  PROCESSING
   COMPLETED
   FAILED
+  REVERSED
+}
+
+enum SavingsType {
+  FLEXIBLE
+  LOCKED
+}
+
+enum OrderSide {
+  BUY
+  SELL
+}
+
+enum OrderStatus {
+  PENDING
+  SUBMITTED
+  PARTIALLY_FILLED
+  FILLED
   CANCELLED
+  FAILED
+}
+
+enum ConversationState {
+  IDLE
+  ONBOARDING
+  AWAITING_BVN
+  AWAITING_NIN
+  AWAITING_LIVENESS
+  AWAITING_RISK_PROFILE
+  TRADING
+  SAVING
+  AWAITING_TRADE_CONFIRM
+  ESCALATED_TO_AGENT
+}
+
+enum NotificationType {
+  TRADE_SETTLED
+  PRICE_ALERT
+  SAVINGS_NUDGE
+  GOAL_REACHED
+  SYSTEM
+}
+
+// ============================================================
+// CUSTOMERS  (WhatsApp-identified)
+// ============================================================
+
+model User {
+  id             String      @id @default(uuid())
+  whatsappNumber String      @unique @map("whatsapp_number")
+  firstName      String?     @map("first_name")
+  lastName       String?     @map("last_name")
+  email          String?     @unique
+  status         UserStatus  @default(PENDING_KYC)
+  riskProfile    RiskProfile? @map("risk_profile")
+  cscsAccountNumber String?  @map("cscs_account_number")
+  conversationState   ConversationState @default(IDLE) @map("conversation_state")
+  conversationContext Json?             @map("conversation_context")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  kycVerifications KycVerification[]
+  wallets          Wallet[]
+  savingsGoals     SavingsGoal[]
+  holdings         Holding[]
+  orders           Order[]
+  notifications    Notification[]
+  priceAlerts      PriceAlert[]
+  auditLogs        AuditLog[]
+
+  @@index([status])
+  @@map("users")
+}
+
+// ============================================================
+// ADMIN / STAFF  (separate model — password-based, internal only)
+// ============================================================
+
+model AdminUser {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String    @map("password_hash")
+  role         AdminRole @default(SUPPORT)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLoginAt  DateTime? @map("last_login_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@map("admin_users")
+}
+
+// ============================================================
+// KYC 
+// ============================================================
+
+model KycVerification {
+  id            String    @id @default(uuid())
+  userId        String    @map("user_id")
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type          KycType
+  status        KycStatus @default(PENDING)
+  valueHash     String?   @map("value_hash") // hashed BVN/NIN — never the raw number
+  providerRef   String?   @map("provider_ref")
+  metadata      Json      @default("{}") // provider response minus any raw PII
+  failureReason String?   @map("failure_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([type, status])
+  @@map("kyc_verifications")
+}
+
+// ============================================================
+// WALLET + LEDGER
+// ============================================================
+
+model Wallet {
+  id            String     @id @default(uuid())
+  userId        String     @map("user_id")
+  user          User       @relation(fields: [userId], references: [id])
+  type          WalletType
+  currency      String     @default("NGN")
+  cachedBalance BigInt     @default(0) @map("cached_balance") // minor units — reconciled cache only
+  cachedAt      DateTime?  @map("cached_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+
+  ledgerEntries LedgerEntry[]
+
+  @@unique([userId, type, currency])
+  @@map("wallets")
+}
+
+model Transaction {
+  id             String            @id @default(uuid())
+  idempotencyKey String            @unique @map("idempotency_key")
+  type           TransactionType
+  status         TransactionStatus @default(PENDING)
+  amount         BigInt // minor units
+  currency       String            @default("NGN")
+  metadata       Json?
+  externalRef    String?           @map("external_ref") // broker/MFB reference
+  createdAt      DateTime          @default(now()) @map("created_at")
+  completedAt    DateTime?         @map("completed_at")
+
+  ledgerEntries LedgerEntry[]
+
+  @@index([status])
+  @@index([type])
+  @@map("transactions")
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  transactionId String          @map("transaction_id")
+  transaction   Transaction     @relation(fields: [transactionId], references: [id])
+  walletId      String          @map("wallet_id")
+  wallet        Wallet          @relation(fields: [walletId], references: [id])
+  entryType     LedgerEntryType @map("entry_type")
+  amount        BigInt // always positive; direction from entryType
+  balanceAfter  BigInt          @map("balance_after")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  @@index([walletId])
+  @@index([transactionId])
+  @@map("ledger_entries")
+}
+
+// ============================================================
+// SAVINGS
+// ============================================================
+
+model SavingsGoal {
+  id              String      @id @default(uuid())
+  userId          String      @map("user_id")
+  user            User        @relation(fields: [userId], references: [id])
+  name            String
+  type            SavingsType
+  targetAmount    BigInt?     @map("target_amount")
+  targetDate      DateTime?   @map("target_date")
+  interestRateBps Int         @map("interest_rate_bps") // basis points
+  isLocked        Boolean     @default(false) @map("is_locked")
+  lockedUntil     DateTime?   @map("locked_until")
+  isCompleted     Boolean     @default(false) @map("is_completed")
+  createdAt       DateTime    @default(now()) @map("created_at")
+
+  @@map("savings_goals")
+}
+
+// ============================================================
+// MARKET DATA + TRADING
+// ============================================================
+
+model Instrument {
+  id        String    @id @default(uuid())
+  ticker    String    @unique
+  name      String
+  exchange  String    @default("NGX")
+  lastPrice BigInt?   @map("last_price")
+  priceAt   DateTime? @map("price_at")
+
+  holdings    Holding[]
+  orders      Order[]
+  priceAlerts PriceAlert[]
+
+  @@map("instruments")
+}
+
+model Holding {
+  id           String     @id @default(uuid())
+  userId       String     @map("user_id")
+  user         User       @relation(fields: [userId], references: [id])
+  instrumentId String     @map("instrument_id")
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  quantity     Decimal    @db.Decimal(20, 6)
+  avgCost      BigInt     @map("avg_cost")
+
+  @@unique([userId, instrumentId])
+  @@map("holdings")
+}
+
+model Order {
+  id             String      @id @default(uuid())
+  userId         String      @map("user_id")
+  user           User        @relation(fields: [userId], references: [id])
+  instrumentId   String      @map("instrument_id")
+  instrument     Instrument  @relation(fields: [instrumentId], references: [id])
+  side           OrderSide
+  quantity       Decimal     @db.Decimal(20, 6)
+  price          BigInt
+  commission     BigInt      @default(0)
+  status         OrderStatus @default(PENDING)
+  brokerOrderRef String?     @map("broker_order_ref")
+  failureReason  String?     @map("failure_reason")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  filledAt       DateTime?   @map("filled_at")
+
+  @@index([status])
+  @@map("orders")
+}
+
+// ============================================================
+// NOTIFICATIONS + ALERTS
+// ============================================================
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String           @map("user_id")
+  user      User             @relation(fields: [userId], references: [id])
+  type      NotificationType
+  title     String
+  message   String
+  channel   String           @default("whatsapp")
+  isSent    Boolean          @default(false) @map("is_sent")
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([type])
+  @@map("notifications")
+}
+
+model PriceAlert {
+  id           String     @id @default(uuid())
+  userId       String     @map("user_id")
+  user         User       @relation(fields: [userId], references: [id])
+  instrumentId String     @map("instrument_id")
+  instrument   Instrument @relation(fields: [instrumentId], references: [id])
+  targetPrice  BigInt     @map("target_price")
+  direction    String // above | below
+  isActive     Boolean    @default(true) @map("is_active")
+  isTriggered  Boolean    @default(false) @map("is_triggered")
+  triggeredAt  DateTime?  @map("triggered_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([isActive, isTriggered])
+  @@map("price_alerts")
+}
+
+// ============================================================
+// AUDIT
+// ============================================================
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?  @map("user_id")
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  actorType  String   @map("actor_type") // user, admin, system
+  action     String
+  resource   String
+  resourceId String?  @map("resource_id")
+  before     Json?
+  after      Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@index([action])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
