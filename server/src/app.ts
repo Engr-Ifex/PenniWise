@@ -9,6 +9,10 @@ import logger from './config/logger';
 import AppError from './utils/appError';
 import router from './routes/index';
 import { errorHandler } from './middleware/error.middleware';
+import { authRouter } from './module/auth/auth.routes';
+import { adminUsersRouter } from './module/admin-users/admin-users.routes';
+import { sessionsRouter } from './module/sessions/sessions.routes';
+import { usersRouter } from './module/users/users.routes';
 
 const app: Express = express();
 
@@ -33,6 +37,10 @@ const limiter = ratelimit({
 app.use('/api/v1', limiter);
 app.use('/api/v1', router);
 
+app.use('/api/auth', authRouter);
+app.use('/api/admin-users', adminUsersRouter);
+app.use('/api/sessions', sessionsRouter);
+app.use('/api/users', usersRouter);
 /*
  * Handling unhandled Routes
  */

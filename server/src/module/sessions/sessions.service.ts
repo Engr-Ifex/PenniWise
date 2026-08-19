@@ -1,0 +1,14 @@
+import { authRepository } from '../auth/auth.repository';
+import { NotFoundError, ForbiddenError } from '../../utils/appError';
+
+export async function listSessions(adminId: string) {
+  const sessions = await authRepository.listActiveSessions(adminId);
+  return sessions.map(({ refreshTokenHash, ...safe }) => safe);
+}
+
+export async function revokeSession(adminId: string, sessionId: string) {
+  const session = await authRepository.findSessionById(sessionId);
+  if (!session) throw new NotFoundError('Session not found');
+  if (session.adminId !== adminId) throw new ForbiddenError();
+  await authRepository.revokeSession(sessionId);
+}
