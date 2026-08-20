@@ -8,6 +8,7 @@ export const errorHandler = (
   res: Response,
   _next: NextFunction,
 ) => {
+  console.error('SERVER ERROR:', err);
   logger.error(err);
 
   if (err instanceof AppError) {

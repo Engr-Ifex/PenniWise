@@ -1,5 +1,5 @@
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
@@ -113,22 +113,23 @@ enum NotificationType {
 }
 
 // ============================================================
-// CUSTOMERS  (WhatsApp-identified)
+// CUSTOMERS  (WhatsApp-identified — no password, ever)
 // ============================================================
 
 model User {
-  id             String      @id @default(uuid())
-  whatsappNumber String      @unique @map("whatsapp_number")
-  firstName      String?     @map("first_name")
-  lastName       String?     @map("last_name")
-  email          String?     @unique
-  status         UserStatus  @default(PENDING_KYC)
-  riskProfile    RiskProfile? @map("risk_profile")
-  cscsAccountNumber String?  @map("cscs_account_number")
+  id                  String            @id @default(uuid())
+  whatsappNumber      String            @unique @map("whatsapp_number")
+  firstName           String?           @map("first_name")
+  lastName            String?           @map("last_name")
+  email               String?           @unique
+  status              UserStatus        @default(PENDING_KYC)
+  riskProfile         RiskProfile?      @map("risk_profile")
+  cscsAccountNumber   String?           @map("cscs_account_number")
+  transactionPinHash  String?           @map("transaction_pin_hash") // bcrypt hash of a 4-6 digit PIN, checked before trades/withdrawals — not a login credential
   conversationState   ConversationState @default(IDLE) @map("conversation_state")
   conversationContext Json?             @map("conversation_context")
-  createdAt      DateTime    @default(now()) @map("created_at")
-  updatedAt      DateTime    @updatedAt @map("updated_at")
+  createdAt           DateTime          @default(now()) @map("created_at")
+  updatedAt           DateTime          @updatedAt @map("updated_at")
 
   kycVerifications KycVerification[]
   wallets          Wallet[]
@@ -144,7 +145,7 @@ model User {
 }
 
 // ============================================================
-// ADMIN / STAFF  (separate model — password-based, internal only)
+// ADMIN / STAFF  
 // ============================================================
 
 model AdminUser {
@@ -156,11 +157,28 @@ model AdminUser {
   lastLoginAt  DateTime? @map("last_login_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
+  sessions AdminSession[]
+
   @@map("admin_users")
 }
 
+model AdminSession {
+  id               String    @id @default(uuid())
+  adminId          String    @map("admin_id")
+  admin            AdminUser @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  refreshTokenHash String    @map("refresh_token_hash")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  expiresAt        DateTime  @map("expires_at")
+  revokedAt        DateTime? @map("revoked_at")
+
+  @@index([adminId])
+  @@map("admin_sessions")
+}
+
 // ============================================================
-// KYC 
+// KYC — one row per verification type; raw BVN/NIN never stored
 // ============================================================
 
 model KycVerification {
@@ -181,7 +199,7 @@ model KycVerification {
 }
 
 // ============================================================
-// WALLET + LEDGER
+// WALLET + LEDGER — balances are derived, never written directly
 // ============================================================
 
 model Wallet {

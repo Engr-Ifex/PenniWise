@@ -1,0 +1,256 @@
+// Penniwise — Database Schema (DBML)
+// Paste this directly into dbdiagram.io
+// Money fields are bigint minor units (kobo). Rates are basis points.
+
+Enum user_status {
+  PENDING_KYC
+  ACTIVE
+  SUSPENDED
+  CLOSED
+}
+
+Enum kyc_status {
+  NOT_STARTED
+  IN_PROGRESS
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+Enum kyc_provider {
+  DOJAH
+  SMILE_IDENTITY
+  MOCK
+}
+
+Enum wallet_type {
+  SAVINGS
+  TRADING
+}
+
+Enum ledger_entry_type {
+  DEBIT
+  CREDIT
+}
+
+Enum transaction_type {
+  DEPOSIT
+  WITHDRAWAL
+  TRADE_BUY
+  TRADE_SELL
+  SAVINGS_LOCK
+  SAVINGS_UNLOCK
+  INTEREST_ACCRUAL
+  FEE
+  TRANSFER
+}
+
+Enum transaction_status {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+Enum savings_type {
+  FLEXIBLE
+  LOCKED
+}
+
+Enum order_side {
+  BUY
+  SELL
+}
+
+Enum order_status {
+  PENDING
+  SUBMITTED
+  PARTIALLY_FILLED
+  FILLED
+  CANCELLED
+  FAILED
+}
+
+Enum conversation_state {
+  IDLE
+  AWAITING_BVN
+  AWAITING_NIN
+  AWAITING_LIVENESS
+  AWAITING_RISK_PROFILE
+  AWAITING_TRADE_CONFIRM
+  AWAITING_SAVINGS_GOAL
+  AWAITING_SAVINGS_AMOUNT
+  ESCALATED_TO_AGENT
+}
+
+Table users {
+  id uuid [pk, default: `gen_random_uuid()`]
+  whatsapp_number varchar [unique, not null]
+  first_name varchar
+  last_name varchar
+  email varchar [unique]
+  status user_status [not null, default: 'PENDING_KYC']
+  risk_profile varchar
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    status
+  }
+}
+
+Table kyc_records {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [unique, not null, ref: - users.id]
+  provider kyc_provider [not null]
+  status kyc_status [not null, default: 'NOT_STARTED']
+  bvn_hash varchar
+  nin_hash varchar
+  liveness_passed boolean
+  provider_ref varchar
+  raw_response jsonb
+  reviewed_by varchar
+  reviewed_at timestamp
+  created_at timestamp [not null, default: `now()`]
+  updated_at timestamp [not null]
+
+  indexes {
+    status
+  }
+}
+
+Table wallets {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  type wallet_type [not null]
+  currency varchar [not null, default: 'NGN']
+  cached_balance bigint [not null, default: 0, note: 'minor units (kobo) — derived from ledger_entries, not written directly']
+  cached_at timestamp
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (user_id, type, currency) [unique]
+  }
+}
+
+Table transactions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  idempotency_key varchar [unique, not null]
+  type transaction_type [not null]
+  status transaction_status [not null, default: 'PENDING']
+  amount bigint [not null, note: 'minor units']
+  currency varchar [not null, default: 'NGN']
+  metadata jsonb
+  external_ref varchar [note: 'broker/MFB reference']
+  created_at timestamp [not null, default: `now()`]
+  completed_at timestamp
+
+  indexes {
+    status
+    type
+  }
+}
+
+Table ledger_entries {
+  id uuid [pk, default: `gen_random_uuid()`]
+  transaction_id uuid [not null, ref: > transactions.id]
+  wallet_id uuid [not null, ref: > wallets.id]
+  entry_type ledger_entry_type [not null]
+  amount bigint [not null, note: 'always positive; direction from entry_type']
+  balance_after bigint [not null, note: 'snapshot at write time, for audit']
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    wallet_id
+    transaction_id
+  }
+
+  note: 'Append-only. Never UPDATE or DELETE — reverse with an offsetting entry.'
+}
+
+Table savings_goals {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  name varchar [not null]
+  type savings_type [not null]
+  target_amount bigint
+  target_date timestamp
+  interest_rate_bps int [not null, note: 'basis points, not float %']
+  is_locked boolean [not null, default: false]
+  locked_until timestamp
+  created_at timestamp [not null, default: `now()`]
+}
+
+Table instruments {
+  id uuid [pk, default: `gen_random_uuid()`]
+  ticker varchar [unique, not null]
+  name varchar [not null]
+  exchange varchar [not null, default: 'NGX']
+  last_price bigint [note: 'minor units']
+  price_at timestamp
+}
+
+Table holdings {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  instrument_id uuid [not null, ref: > instruments.id]
+  quantity decimal(20,6) [not null]
+  avg_cost bigint [not null, note: 'minor units']
+
+  indexes {
+    (user_id, instrument_id) [unique]
+  }
+}
+
+Table orders {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  instrument_id uuid [not null, ref: > instruments.id]
+  side order_side [not null]
+  quantity decimal(20,6) [not null]
+  price bigint [not null, note: 'quoted/limit price, minor units']
+  commission bigint [not null, default: 0]
+  status order_status [not null, default: 'PENDING']
+  broker_order_ref varchar
+  created_at timestamp [not null, default: `now()`]
+  filled_at timestamp
+
+  indexes {
+    status
+  }
+}
+
+Table conversation_sessions {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [unique, not null, ref: - users.id]
+  state conversation_state [not null, default: 'IDLE']
+  context jsonb [not null, default: `'{}'`]
+  last_message_at timestamp [not null, default: `now()`]
+}
+
+Table notifications {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [not null, ref: > users.id]
+  channel varchar [not null, note: 'whatsapp, email, sms']
+  template varchar [not null]
+  payload jsonb [not null]
+  sent_at timestamp
+  created_at timestamp [not null, default: `now()`]
+}
+
+Table audit_logs {
+  id uuid [pk, default: `gen_random_uuid()`]
+  user_id uuid [ref: > users.id]
+  actor_type varchar [not null, note: 'user, admin, system']
+  action varchar [not null]
+  entity varchar [not null]
+  entity_id varchar
+  before jsonb
+  after jsonb
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (entity, entity_id)
+  }
+}
