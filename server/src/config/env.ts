@@ -17,9 +17,10 @@ export const config = {
     secret: mustGet('JWT_ACCESS_SECRET'),
     refreshSecret: mustGet('JWT_REFRESH_SECRET'),
     accessExpiresIn: process.env['JWT_ACCESS_EXPIRES_IN'] ?? '15m',
-    refreshExpiresInDays: Number(
-      process.env['JWT_REFRESH_EXPIRES_IN_DAYS'] ?? 7,
+    refreshExpiresInDays: parseInt(
+      process.env['JWT_REFRESH_EXPIRES_IN_DAYS'] ?? '7',
+      10,
     ),
   },
-  SALT_ROUNDS: mustGet('SALT_ROUNDS'),
+  SALT_ROUNDS: parseInt(mustGet('SALT_ROUNDS'), 12),
 };
